@@ -26,9 +26,15 @@ defmodule TicketService.Tickets do
   end
 
   def update_ticket_type(%TicketType{} = ticket_type, attrs) do
-    ticket_type
-    |> TicketType.changeset(attrs)
-    |> Repo.update()
+    if TicketService.Orders.event_has_sales?(ticket_type.event_id) do
+      ticket_type
+      |> TicketType.locked_changeset(attrs)
+      |> Repo.update()
+    else
+      ticket_type
+      |> TicketType.changeset(attrs)
+      |> Repo.update()
+    end
   end
 
   def delete_ticket_type(%TicketType{} = ticket_type) do

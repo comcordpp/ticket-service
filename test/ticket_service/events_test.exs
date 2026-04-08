@@ -5,6 +5,8 @@ defmodule TicketService.EventsTest do
   alias TicketService.Events.Event
   alias TicketService.Venues
   alias TicketService.Tickets
+  alias TicketService.Orders
+  alias TicketService.Orders.Order
 
   @valid_attrs %{
     title: "Summer Music Festival",
@@ -99,6 +101,95 @@ defmodule TicketService.EventsTest do
       {:ok, event} = Events.create_event(@valid_attrs)
       assert {:ok, cancelled} = Events.cancel_event(event)
       assert cancelled.status == "cancelled"
+    end
+
+    test "rejects cancelling an already cancelled event" do
+      {:ok, event} = Events.create_event(@valid_attrs)
+      {:ok, cancelled} = Events.cancel_event(event)
+      assert {:error, :already_cancelled} = Events.cancel_event(cancelled)
+    end
+
+    test "cancels event with confirmed orders and marks them cancelled" do
+      {:ok, venue} = Venues.create_venue(%{name: "Arena", capacity: 5000})
+      {:ok, event} = Events.create_event(Map.put(@valid_attrs, :venue_id, venue.id))
+      {:ok, tt} = Tickets.create_ticket_type(%{
+        name: "General", price: Decimal.new("25.00"), quantity: 100, event_id: event.id
+      })
+      {:ok, _published} = Events.publish_event(event)
+
+      # Create a confirmed order
+      {:ok, order} =
+        Repo.insert(%Order{
+          session_id: "test-session",
+          event_id: event.id,
+          status: "confirmed",
+          subtotal: Decimal.new("25.00"),
+          platform_fee: Decimal.new("1.13"),
+          processing_fee: Decimal.new("1.06"),
+          total: Decimal.new("27.19")
+        })
+
+      {:ok, cancelled} = Events.cancel_event(%{event | status: "published"})
+      assert cancelled.status == "cancelled"
+
+      # Order should be cancelled
+      updated_order = Repo.get(Order, order.id)
+      assert updated_order.status == "cancelled"
+    end
+  end
+
+  describe "update_event/2 with cancelled event" do
+    test "rejects editing a cancelled event" do
+      {:ok, event} = Events.create_event(@valid_attrs)
+      {:ok, cancelled} = Events.cancel_event(event)
+      assert {:error, :event_cancelled} = Events.update_event(cancelled, %{title: "New Title"})
+    end
+  end
+
+  describe "update_event/2 with sales (field locking)" do
+    setup do
+      {:ok, venue} = Venues.create_venue(%{name: "Arena", capacity: 5000})
+      {:ok, event} = Events.create_event(Map.merge(@valid_attrs, %{venue_id: venue.id}))
+      {:ok, tt} = Tickets.create_ticket_type(%{
+        name: "General", price: Decimal.new("25.00"), quantity: 100, event_id: event.id
+      })
+      {:ok, published} = Events.publish_event(event)
+
+      # Create a confirmed order to trigger has_sales?
+      {:ok, _order} =
+        Repo.insert(%Order{
+          session_id: "test-session",
+          event_id: event.id,
+          status: "confirmed",
+          subtotal: Decimal.new("25.00"),
+          platform_fee: Decimal.new("1.13"),
+          processing_fee: Decimal.new("1.06"),
+          total: Decimal.new("27.19")
+        })
+
+      %{event: %{published | status: "published"}, venue: venue, ticket_type: tt}
+    end
+
+    test "allows editing title and description", %{event: event} do
+      assert {:ok, updated} = Events.update_event(event, %{title: "New Title", description: "New desc"})
+      assert updated.title == "New Title"
+      assert updated.description == "New desc"
+    end
+
+    test "rejects changing venue_id after sales", %{event: event} do
+      {:ok, venue2} = Venues.create_venue(%{name: "Arena 2", capacity: 3000})
+      assert {:error, changeset} = Events.update_event(event, %{venue_id: venue2.id})
+      assert %{venue_id: ["cannot be changed after tickets have been sold"]} = errors_on(changeset)
+    end
+
+    test "rejects changing starts_at after sales", %{event: event} do
+      assert {:error, changeset} = Events.update_event(event, %{starts_at: ~U[2026-08-01 18:00:00Z]})
+      assert %{starts_at: ["cannot be changed after tickets have been sold"]} = errors_on(changeset)
+    end
+
+    test "rejects changing category after sales", %{event: event} do
+      assert {:error, changeset} = Events.update_event(event, %{category: "sports"})
+      assert %{category: ["cannot be changed after tickets have been sold"]} = errors_on(changeset)
     end
   end
 

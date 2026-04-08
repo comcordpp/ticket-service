@@ -28,6 +28,27 @@ defmodule TicketService.Tickets.TicketType do
     |> foreign_key_constraint(:event_id)
   end
 
+  @doc "Changeset that locks price and quantity when the event has sales."
+  def locked_changeset(ticket_type, attrs) do
+    locked_fields = [:price, :quantity]
+
+    changeset =
+      ticket_type
+      |> cast(attrs, [:name, :price, :quantity, :sale_starts_at, :sale_ends_at])
+      |> validate_required([:name, :price, :quantity, :event_id])
+      |> validate_number(:price, greater_than_or_equal_to: 0)
+      |> validate_number(:quantity, greater_than: 0)
+      |> validate_sale_window()
+
+    Enum.reduce(locked_fields, changeset, fn field, cs ->
+      if get_change(cs, field) != nil do
+        add_error(cs, field, "cannot be changed after tickets have been sold")
+      else
+        cs
+      end
+    end)
+  end
+
   defp validate_sale_window(changeset) do
     case {get_field(changeset, :sale_starts_at), get_field(changeset, :sale_ends_at)} do
       {starts, ends} when not is_nil(starts) and not is_nil(ends) ->

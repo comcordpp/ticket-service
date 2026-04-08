@@ -50,6 +50,44 @@ defmodule TicketService.TicketsTest do
     end
   end
 
+  describe "update_ticket_type/2 with sales (field locking)" do
+    setup %{event: event} do
+      {:ok, tt} = Tickets.create_ticket_type(%{
+        name: "General", price: Decimal.new("25.00"), quantity: 100, event_id: event.id
+      })
+
+      # Publish and create a confirmed order to trigger has_sales?
+      {:ok, _published} = Events.publish_event(event)
+      {:ok, _order} =
+        Repo.insert(%TicketService.Orders.Order{
+          session_id: "test-session",
+          event_id: event.id,
+          status: "confirmed",
+          subtotal: Decimal.new("25.00"),
+          platform_fee: Decimal.new("1.13"),
+          processing_fee: Decimal.new("1.06"),
+          total: Decimal.new("27.19")
+        })
+
+      %{ticket_type: tt}
+    end
+
+    test "allows updating name with sales", %{ticket_type: tt} do
+      assert {:ok, updated} = Tickets.update_ticket_type(tt, %{name: "New Name"})
+      assert updated.name == "New Name"
+    end
+
+    test "rejects changing price after sales", %{ticket_type: tt} do
+      assert {:error, changeset} = Tickets.update_ticket_type(tt, %{price: Decimal.new("50.00")})
+      assert %{price: ["cannot be changed after tickets have been sold"]} = errors_on(changeset)
+    end
+
+    test "rejects changing quantity after sales", %{ticket_type: tt} do
+      assert {:error, changeset} = Tickets.update_ticket_type(tt, %{quantity: 200})
+      assert %{quantity: ["cannot be changed after tickets have been sold"]} = errors_on(changeset)
+    end
+  end
+
   describe "promo codes" do
     test "creates a percentage promo code", %{event: event} do
       attrs = %{code: "SUMMER20", discount_type: "percentage", discount_value: 20, event_id: event.id}

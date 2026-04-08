@@ -45,6 +45,11 @@ defmodule TicketServiceWeb.EventController do
       {:ok, event} ->
         json(conn, %{data: event_json(event)})
 
+      {:error, :event_cancelled} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Cannot edit a cancelled event"})
+
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -88,6 +93,12 @@ defmodule TicketServiceWeb.EventController do
 
     case Events.cancel_event(event) do
       {:ok, event} -> json(conn, %{data: event_json(event)})
+
+      {:error, :already_cancelled} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Event is already cancelled"})
+
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)

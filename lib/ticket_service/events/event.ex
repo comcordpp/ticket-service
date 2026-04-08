@@ -33,16 +33,24 @@ defmodule TicketService.Events.Event do
     |> foreign_key_constraint(:venue_id)
   end
 
+  @locked_fields_with_sales [:venue_id, :starts_at, :category]
+
   @doc "Changeset for editing published events with sales — locks venue_id, starts_at, category."
   def edit_with_sales_changeset(event, attrs) do
-    locked_fields = [:venue_id, :starts_at, :category]
-    locked_strings = Enum.map(locked_fields, &Atom.to_string/1)
-    safe_attrs = Map.drop(attrs, locked_fields ++ locked_strings)
+    changeset =
+      event
+      |> cast(attrs, [:title, :description, :ends_at, :venue_id, :starts_at, :category])
+      |> validate_required([:title, :starts_at])
+      |> validate_dates()
 
-    event
-    |> cast(safe_attrs, [:title, :description, :ends_at])
-    |> validate_required([:title, :starts_at])
-    |> validate_dates()
+    # Check if any locked fields are being changed and add errors
+    Enum.reduce(@locked_fields_with_sales, changeset, fn field, cs ->
+      if get_change(cs, field) != nil do
+        add_error(cs, field, "cannot be changed after tickets have been sold")
+      else
+        cs
+      end
+    end)
   end
 
   def publish_changeset(event) do

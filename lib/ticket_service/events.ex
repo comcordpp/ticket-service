@@ -29,6 +29,10 @@ defmodule TicketService.Events do
     |> Repo.insert()
   end
 
+  def update_event(%Event{status: "cancelled"}, _attrs) do
+    {:error, :event_cancelled}
+  end
+
   def update_event(%Event{} = event, attrs) do
     if event.status == "published" and TicketService.Orders.event_has_sales?(event.id) do
       event
@@ -55,6 +59,10 @@ defmodule TicketService.Events do
       |> Event.publish_changeset()
       |> Repo.update()
     end
+  end
+
+  def cancel_event(%Event{status: "cancelled"}) do
+    {:error, :already_cancelled}
   end
 
   def cancel_event(%Event{} = event) do
