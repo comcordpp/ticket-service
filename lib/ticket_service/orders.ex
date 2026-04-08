@@ -63,7 +63,7 @@ defmodule TicketService.Orders do
         |> Order.changeset(%{status: "confirmed"})
         |> Repo.update()
 
-      # Mark seats as sold
+      # Mark seats as sold with optimistic locking
       order = Repo.preload(order, :order_items)
 
       seat_ids =
@@ -72,8 +72,14 @@ defmodule TicketService.Orders do
         |> Enum.reject(&is_nil/1)
 
       if seat_ids != [] do
-        from(s in Seat, where: s.id in ^seat_ids and s.status == "held")
-        |> Repo.update_all(set: [status: "sold", updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
+        seats = from(s in Seat, where: s.id in ^seat_ids) |> Repo.all()
+
+        Enum.each(seats, fn seat ->
+          case seat |> Seat.status_changeset("sold") |> Repo.update() do
+            {:ok, _} -> :ok
+            {:error, _} -> Repo.rollback(:seat_confirmation_conflict)
+          end
+        end)
       end
 
       # Increment promo code used_count if applicable

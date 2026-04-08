@@ -11,6 +11,7 @@ defmodule TicketService.Seating.Seat do
     field :row_label, :string
     field :seat_number, :integer
     field :status, :string, default: "available"
+    field :lock_version, :integer, default: 1
 
     belongs_to :section, TicketService.Seating.Section
 
@@ -25,6 +26,14 @@ defmodule TicketService.Seating.Seat do
     |> validate_number(:seat_number, greater_than: 0)
     |> foreign_key_constraint(:section_id)
     |> unique_constraint([:section_id, :row_label, :seat_number])
+  end
+
+  @doc "Changeset for status transitions with optimistic locking."
+  def status_changeset(seat, new_status) do
+    seat
+    |> cast(%{status: new_status}, [:status])
+    |> validate_inclusion(:status, @statuses)
+    |> optimistic_lock(:lock_version)
   end
 
   def statuses, do: @statuses

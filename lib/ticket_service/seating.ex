@@ -70,6 +70,7 @@ defmodule TicketService.Seating do
           row_label: row_label(row),
           seat_number: seat_num,
           status: "available",
+          lock_version: 1,
           inserted_at: now,
           updated_at: now
         }

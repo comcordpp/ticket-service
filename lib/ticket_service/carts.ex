@@ -158,32 +158,51 @@ defmodule TicketService.Carts do
   defp hold_seats([]), do: :ok
 
   defp hold_seats(seat_ids) do
-    {count, _} =
-      from(s in Seat,
-        where: s.id in ^seat_ids,
-        where: s.status == "available"
-      )
-      |> Repo.update_all(set: [status: "held", updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
+    seats =
+      from(s in Seat, where: s.id in ^seat_ids)
+      |> Repo.all()
 
-    if count == length(seat_ids) do
-      :ok
-    else
-      # Rollback any partial holds
-      from(s in Seat, where: s.id in ^seat_ids, where: s.status == "held")
-      |> Repo.update_all(set: [status: "available", updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
-
-      Repo.rollback(:seats_unavailable)
+    # Verify all seats exist
+    if length(seats) != length(seat_ids) do
+      Repo.rollback(:seats_not_found)
     end
+
+    # Verify all seats are available before attempting holds
+    unavailable = Enum.reject(seats, &(&1.status == "available"))
+
+    if unavailable != [] do
+      Repo.rollback(:seat_conflict)
+    end
+
+    # Atomically hold each seat with optimistic locking
+    Enum.each(seats, fn seat ->
+      case seat |> Seat.status_changeset("held") |> Repo.update() do
+        {:ok, _} ->
+          :ok
+
+        {:error, %Ecto.Changeset{errors: errors}} ->
+          if Keyword.has_key?(errors, :lock_version) do
+            Repo.rollback(:seat_conflict)
+          else
+            Repo.rollback(:seats_unavailable)
+          end
+      end
+    end)
+
+    :ok
+  rescue
+    Ecto.StaleEntryError ->
+      Repo.rollback(:seat_conflict)
   end
 
   defp release_seats([]), do: :ok
 
   defp release_seats(seat_ids) do
-    from(s in Seat,
-      where: s.id in ^seat_ids,
-      where: s.status == "held"
-    )
-    |> Repo.update_all(set: [status: "available", updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
+    from(s in Seat, where: s.id in ^seat_ids, where: s.status == "held")
+    |> Repo.all()
+    |> Enum.each(fn seat ->
+      seat |> Seat.status_changeset("available") |> Repo.update()
+    end)
   end
 
   # --- Process Lookup ---

@@ -31,6 +31,12 @@ defmodule TicketServiceWeb.CartController do
       {:error, :seats_unavailable} ->
         conn |> put_status(:conflict) |> json(%{error: "One or more seats are unavailable"})
 
+      {:error, :seat_conflict} ->
+        conn |> put_status(:conflict) |> json(%{error: "One or more seats are already held by another session"})
+
+      {:error, :seats_not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "One or more seats not found"})
+
       {:error, :cart_not_found} ->
         conn |> put_status(:not_found) |> json(%{error: "Cart not found"})
 
