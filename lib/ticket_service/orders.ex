@@ -74,12 +74,17 @@ defmodule TicketService.Orders do
       if seat_ids != [] do
         seats = from(s in Seat, where: s.id in ^seat_ids) |> Repo.all()
 
-        Enum.each(seats, fn seat ->
-          case seat |> Seat.status_changeset("sold") |> Repo.update() do
-            {:ok, _} -> :ok
-            {:error, _} -> Repo.rollback(:seat_confirmation_conflict)
-          end
-        end)
+        try do
+          Enum.each(seats, fn seat ->
+            case seat |> Seat.status_changeset("sold") |> Repo.update() do
+              {:ok, _} -> :ok
+              {:error, _} -> Repo.rollback(:seat_confirmation_conflict)
+            end
+          end)
+        rescue
+          Ecto.StaleEntryError ->
+            Repo.rollback(:seat_confirmation_conflict)
+        end
       end
 
       # Increment promo code used_count if applicable
