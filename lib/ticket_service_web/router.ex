@@ -43,6 +43,11 @@ defmodule TicketServiceWeb.Router do
     delete "/carts/:session_id/items/:ticket_type_id", CartController, :remove_item
     patch "/carts/:session_id/items/:ticket_type_id", CartController, :update_item
     delete "/carts/:session_id", CartController, :clear
+    # Checkout flow
+    get "/carts/:session_id/review", CheckoutController, :review
+    post "/carts/:session_id/checkout", CheckoutController, :create
+    get "/orders/token/:token", CheckoutController, :show
+    post "/orders/token/:token/confirm", CheckoutController, :confirm
 
     # Public listing
     get "/public/events", EventController, :index

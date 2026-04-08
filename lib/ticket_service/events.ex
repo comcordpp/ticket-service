@@ -30,9 +30,15 @@ defmodule TicketService.Events do
   end
 
   def update_event(%Event{} = event, attrs) do
-    event
-    |> Event.changeset(attrs)
-    |> Repo.update()
+    if event.status == "published" and TicketService.Orders.event_has_sales?(event.id) do
+      event
+      |> Event.edit_with_sales_changeset(attrs)
+      |> Repo.update()
+    else
+      event
+      |> Event.changeset(attrs)
+      |> Repo.update()
+    end
   end
 
   def delete_event(%Event{} = event) do
@@ -52,9 +58,40 @@ defmodule TicketService.Events do
   end
 
   def cancel_event(%Event{} = event) do
-    event
-    |> Ecto.Changeset.change(status: "cancelled")
-    |> Repo.update()
+    alias TicketService.Orders
+    alias TicketService.Orders.Order
+
+    Repo.transaction(fn ->
+      # Cancel the event
+      {:ok, cancelled} =
+        event
+        |> Ecto.Changeset.change(status: "cancelled")
+        |> Repo.update()
+
+      # Batch refund all confirmed orders for this event
+      confirmed_orders =
+        Order
+        |> where([o], o.event_id == ^event.id and o.status == "confirmed")
+        |> Repo.all()
+        |> Repo.preload(:order_items)
+
+      Enum.each(confirmed_orders, fn order ->
+        Orders.cancel_order(order)
+      end)
+
+      # Also cancel pending orders
+      pending_orders =
+        Order
+        |> where([o], o.event_id == ^event.id and o.status == "pending")
+        |> Repo.all()
+        |> Repo.preload(:order_items)
+
+      Enum.each(pending_orders, fn order ->
+        Orders.cancel_order(order)
+      end)
+
+      cancelled
+    end)
   end
 
   def list_published_events do

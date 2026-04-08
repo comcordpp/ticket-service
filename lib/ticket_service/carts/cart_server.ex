@@ -138,6 +138,16 @@ defmodule TicketService.Carts.CartServer do
     {:stop, {:shutdown, :ttl_expired}, state}
   end
 
+  @impl true
+  def terminate(_reason, state) do
+    # Release all held inventory when cart process dies (TTL expiry, crash, clear)
+    Enum.each(state.cart.items, fn {ticket_type_id, item} ->
+      TicketService.Carts.release_inventory_on_expiry(ticket_type_id, item.quantity, item.seat_ids)
+    end)
+
+    :ok
+  end
+
   defp format_cart(%CartServer{} = cart) do
     %{
       session_id: cart.session_id,

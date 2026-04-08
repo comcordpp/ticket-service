@@ -17,11 +17,13 @@ defmodule TicketService.Events.Event do
 
     belongs_to :venue, TicketService.Venues.Venue
     has_many :ticket_types, TicketService.Tickets.TicketType
+    has_many :orders, TicketService.Orders.Order
     has_many :sections, through: [:venue, :sections]
 
     timestamps(type: :utc_datetime)
   end
 
+  @doc "Standard changeset for creating/updating events."
   def changeset(event, attrs) do
     event
     |> cast(attrs, [:title, :description, :category, :status, :starts_at, :ends_at, :venue_id])
@@ -29,6 +31,18 @@ defmodule TicketService.Events.Event do
     |> validate_inclusion(:status, @statuses)
     |> validate_dates()
     |> foreign_key_constraint(:venue_id)
+  end
+
+  @doc "Changeset for editing published events with sales — locks venue_id, starts_at, category."
+  def edit_with_sales_changeset(event, attrs) do
+    locked_fields = [:venue_id, :starts_at, :category]
+    locked_strings = Enum.map(locked_fields, &Atom.to_string/1)
+    safe_attrs = Map.drop(attrs, locked_fields ++ locked_strings)
+
+    event
+    |> cast(safe_attrs, [:title, :description, :ends_at])
+    |> validate_required([:title, :starts_at])
+    |> validate_dates()
   end
 
   def publish_changeset(event) do

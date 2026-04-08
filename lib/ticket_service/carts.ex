@@ -116,6 +116,11 @@ defmodule TicketService.Carts do
 
   # --- Inventory Management ---
 
+  @doc "Public callback for CartServer.terminate/2 — releases held inventory on cart expiry."
+  def release_inventory_on_expiry(ticket_type_id, quantity, seat_ids) do
+    release_inventory(ticket_type_id, quantity, seat_ids)
+  end
+
   defp hold_inventory(ticket_type_id, quantity, seat_ids) do
     Repo.transaction(fn ->
       # Optimistic lock: increment sold_count only if enough remain
