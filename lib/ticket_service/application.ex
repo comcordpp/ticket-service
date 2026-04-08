@@ -9,6 +9,8 @@ defmodule TicketService.Application do
       TicketService.Repo,
       {DNSCluster, query: Application.get_env(:ticket_service, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: TicketService.PubSub},
+      {Registry, keys: :unique, name: TicketService.CartRegistry},
+      {DynamicSupervisor, name: TicketService.CartSupervisor, strategy: :one_for_one},
       TicketServiceWeb.Endpoint
     ]
 

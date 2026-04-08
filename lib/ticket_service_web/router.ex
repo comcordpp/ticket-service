@@ -37,6 +37,13 @@ defmodule TicketServiceWeb.Router do
     resources "/ticket_types", TicketTypeController, only: [:show, :update, :delete]
     resources "/promo_codes", PromoCodeController, only: [:show, :update, :delete]
 
+    # Carts
+    get "/carts/:session_id", CartController, :show
+    post "/carts/:session_id/items", CartController, :add_item
+    delete "/carts/:session_id/items/:ticket_type_id", CartController, :remove_item
+    patch "/carts/:session_id/items/:ticket_type_id", CartController, :update_item
+    delete "/carts/:session_id", CartController, :clear
+
     # Public listing
     get "/public/events", EventController, :index
   end
