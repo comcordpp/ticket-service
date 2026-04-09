@@ -205,11 +205,9 @@ defmodule TicketService.Occupancy.Counter do
   end
 
   defp restore_from_snapshots do
-    # Get the most recent snapshot for each venue/section pair
+    # Unique index on {venue_id, section_id} guarantees one row per pair
     query =
       from s in Snapshot,
-        distinct: [s.venue_id, s.section_id],
-        order_by: [asc: s.venue_id, asc: s.section_id, desc: s.updated_at],
         select: {s.venue_id, s.section_id, s.count}
 
     Repo.all(query)

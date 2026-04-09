@@ -21,5 +21,6 @@ defmodule TicketService.Occupancy.Snapshot do
     |> validate_number(:count, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:venue_id)
     |> foreign_key_constraint(:section_id)
+    |> unique_constraint([:venue_id, :section_id])
   end
 end
