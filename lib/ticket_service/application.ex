@@ -11,6 +11,12 @@ defmodule TicketService.Application do
       {Phoenix.PubSub, name: TicketService.PubSub},
       {Registry, keys: :unique, name: TicketService.CartRegistry},
       {DynamicSupervisor, name: TicketService.CartSupervisor, strategy: :one_for_one},
+      # Queue system
+      {Registry, keys: :unique, name: TicketService.QueueRegistry},
+      {DynamicSupervisor, name: TicketService.QueueSupervisor, strategy: :one_for_one},
+      # Anti-bot
+      TicketService.AntiBot.RateLimiter,
+      TicketService.AntiBot.Detector,
       TicketServiceWeb.Endpoint
     ]
 

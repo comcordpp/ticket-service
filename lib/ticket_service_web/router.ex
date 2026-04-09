@@ -58,6 +58,13 @@ defmodule TicketServiceWeb.Router do
     get "/tickets/:token", TicketController, :show
     post "/tickets/:token/scan", TicketController, :scan
 
+    # Queue system
+    post "/events/:event_id/queue/access", QueueController, :request_access
+    get "/events/:event_id/queue/status", QueueController, :status
+
+    # CAPTCHA verification
+    post "/captcha/verify", CaptchaController, :verify
+
     # Public listing
     get "/public/events", EventController, :index
   end
