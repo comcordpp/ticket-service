@@ -15,3 +15,6 @@ config :ticket_service, TicketServiceWeb.Endpoint,
 
 config :logger, level: :warning
 config :phoenix, :plug_init_mode, :runtime
+
+# Oban: inline testing mode
+config :ticket_service, Oban, testing: :inline

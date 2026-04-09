@@ -104,12 +104,16 @@ defmodule TicketService.Orders do
         confirmed
       end)
 
-    # Generate e-tickets async after successful confirmation
+    # Enqueue e-ticket generation + email delivery via Oban
     case result do
       {:ok, confirmed} ->
-        Task.start(fn ->
-          generate_and_deliver_etickets(confirmed, opts)
-        end)
+        %{
+          "order_id" => confirmed.id,
+          "email" => Keyword.get(opts, :email),
+          "name" => Keyword.get(opts, :name)
+        }
+        |> TicketService.Workers.ETicketEmailWorker.new()
+        |> Oban.insert()
 
         {:ok, confirmed}
 
@@ -118,19 +122,21 @@ defmodule TicketService.Orders do
     end
   end
 
-  defp generate_and_deliver_etickets(order, opts) do
-    email = Keyword.get(opts, :email)
-    name = Keyword.get(opts, :name)
+  @doc """
+  Resend e-tickets for an existing order.
+  Enqueues an Oban job to re-deliver tickets via email.
+  """
+  def resend_tickets(%Order{} = order, email) do
+    tickets = TicketService.ETickets.list_tickets_for_order(order.id)
 
-    case TicketService.ETickets.generate_for_order(order, email: email, name: name) do
-      {:ok, tickets} ->
-        if email do
-          TicketService.Notifications.deliver_etickets(order, tickets)
-        end
+    if tickets == [] do
+      {:error, :no_tickets}
+    else
+      %{"order_id" => order.id, "email" => email}
+      |> TicketService.Workers.ETicketEmailWorker.new()
+      |> Oban.insert()
 
-      {:error, reason} ->
-        require Logger
-        Logger.warning("Failed to generate e-tickets for order #{order.id}: #{inspect(reason)}")
+      {:ok, :enqueued}
     end
   end
 

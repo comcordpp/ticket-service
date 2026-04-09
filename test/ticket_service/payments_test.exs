@@ -80,10 +80,14 @@ defmodule TicketService.PaymentsTest do
 
     Enum.flat_map(order.order_items, fn item ->
       Enum.map(1..item.quantity, fn _ ->
+        token = :crypto.strong_rand_bytes(20) |> Base.url_encode64(padding: false)
+        qr_hash = :crypto.hash(:sha256, token) |> Base.url_encode64(padding: false)
+
         Repo.insert!(%Ticket{
-          token: :crypto.strong_rand_bytes(20) |> Base.url_encode64(padding: false),
+          token: token,
           qr_data: "<svg>test</svg>",
-          status: "active",
+          qr_hash: qr_hash,
+          status: "sold",
           order_id: order.id,
           order_item_id: item.id,
           event_id: order.event_id
@@ -206,7 +210,7 @@ defmodule TicketService.PaymentsTest do
 
       # Tickets for item2 should still be active
       item2_tickets = Repo.all(from t in Ticket, where: t.order_item_id == ^item2.id)
-      Enum.each(item2_tickets, fn t -> assert t.status == "active" end)
+      Enum.each(item2_tickets, fn t -> assert t.status == "sold" end)
     end
 
     test "returns error for invalid line item IDs" do

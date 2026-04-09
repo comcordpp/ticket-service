@@ -487,14 +487,14 @@ defmodule TicketService.Payments do
 
   defp cancel_tickets_for_order(order_id) do
     from(t in Ticket,
-      where: t.order_id == ^order_id and t.status == "active"
+      where: t.order_id == ^order_id and t.status in ["sold", "delivered"]
     )
     |> Repo.update_all(set: [status: "cancelled", updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
   end
 
   defp cancel_tickets_for_items(order_item_ids) do
     from(t in Ticket,
-      where: t.order_item_id in ^order_item_ids and t.status == "active"
+      where: t.order_item_id in ^order_item_ids and t.status in ["sold", "delivered"]
     )
     |> Repo.update_all(set: [status: "cancelled", updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
   end

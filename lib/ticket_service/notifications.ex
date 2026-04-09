@@ -42,8 +42,6 @@ defmodule TicketService.Notifications do
 
           case result do
             {:ok, _} ->
-              ticket_ids = Enum.map(tickets, & &1.id)
-              ETickets.mark_emailed(ticket_ids)
               {:ok, :delivered}
 
             {:error, reason} ->

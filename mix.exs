@@ -39,7 +39,8 @@ defmodule TicketService.MixProject do
       {:stripity_stripe, "~> 3.2"},
       {:eqrcode, "~> 0.1.10"},
       {:swoosh, "~> 1.17"},
-      {:gen_smtp, "~> 1.0"}
+      {:gen_smtp, "~> 1.0"},
+      {:oban, "~> 2.18"}
     ]
   end
 

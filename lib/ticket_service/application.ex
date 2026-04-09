@@ -7,6 +7,7 @@ defmodule TicketService.Application do
     children = [
       TicketServiceWeb.Telemetry,
       TicketService.Repo,
+      {Oban, Application.fetch_env!(:ticket_service, Oban)},
       {DNSCluster, query: Application.get_env(:ticket_service, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: TicketService.PubSub},
       {Registry, keys: :unique, name: TicketService.CartRegistry},

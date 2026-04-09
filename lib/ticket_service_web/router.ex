@@ -66,6 +66,9 @@ defmodule TicketServiceWeb.Router do
 
     # E-Ticket endpoints
     get "/orders/:order_id/tickets", TicketController, :index
+    post "/orders/:order_id/resend-tickets", TicketController, :resend
+    post "/tickets/validate", TicketController, :validate
+    get "/tickets/:id/qr", TicketController, :qr
     get "/tickets/:token", TicketController, :show
     post "/tickets/:token/scan", TicketController, :scan
 

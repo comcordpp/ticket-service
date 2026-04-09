@@ -26,7 +26,13 @@ config :stripity_stripe,
 
 config :ticket_service,
   stripe_webhook_secret: System.get_env("STRIPE_WEBHOOK_SECRET") || "whsec_test_placeholder",
-  base_url: System.get_env("BASE_URL") || "http://localhost:4000"
+  base_url: System.get_env("BASE_URL") || "http://localhost:4000",
+  qr_hmac_secret: System.get_env("QR_HMAC_SECRET") || "dev_hmac_secret_change_in_prod"
+
+# Oban job queue
+config :ticket_service, Oban,
+  repo: TicketService.Repo,
+  queues: [default: 10, emails: 5]
 
 # Email configuration (Swoosh)
 config :ticket_service, TicketService.Mailer,

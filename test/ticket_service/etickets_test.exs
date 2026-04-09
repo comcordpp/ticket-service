@@ -84,7 +84,7 @@ defmodule TicketService.ETicketsTest do
       {:ok, [ticket | _]} = ETickets.generate_for_order(order)
 
       assert {:ok, scanned} = ETickets.scan_ticket(ticket.token)
-      assert scanned.status == "used"
+      assert scanned.status == "scanned"
       assert scanned.scanned_at != nil
     end
 
@@ -102,7 +102,7 @@ defmodule TicketService.ETicketsTest do
   end
 
   describe "cancel_tickets_for_order/1" do
-    test "cancels all active tickets" do
+    test "cancels all sold/delivered tickets" do
       {order, _item, _event} = create_confirmed_order()
       {:ok, tickets} = ETickets.generate_for_order(order)
 
@@ -111,6 +111,110 @@ defmodule TicketService.ETicketsTest do
 
       cancelled = ETickets.list_tickets_for_order(order.id)
       Enum.each(cancelled, fn t -> assert t.status == "cancelled" end)
+    end
+  end
+
+  describe "HMAC QR payload" do
+    test "generates tickets with HMAC-signed QR payload" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      assert ticket.qr_payload != nil
+      assert ticket.qr_hash != nil
+
+      # Payload format: ticket_id:order_id:event_id:hmac
+      parts = String.split(ticket.qr_payload, ":")
+      assert length(parts) == 4
+
+      [tid, oid, eid, _hmac] = parts
+      assert tid == ticket.id
+      assert oid == order.id
+    end
+
+    test "verify_hmac succeeds for valid payload" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      assert :ok = ETickets.verify_hmac(ticket.qr_payload)
+    end
+
+    test "verify_hmac fails for tampered payload" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      tampered = String.replace(ticket.qr_payload, order.id, Ecto.UUID.generate())
+      assert {:error, :invalid_hmac} = ETickets.verify_hmac(tampered)
+    end
+  end
+
+  describe "validate_qr/1" do
+    test "validates and returns ticket for valid QR payload" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      assert {:ok, found} = ETickets.validate_qr(ticket.qr_payload)
+      assert found.id == ticket.id
+    end
+
+    test "rejects invalid QR format" do
+      assert {:error, :invalid_qr_format} = ETickets.validate_qr("not-a-valid-payload")
+    end
+
+    test "rejects tampered QR payload" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      tampered = String.replace(ticket.qr_payload, order.id, Ecto.UUID.generate())
+      assert {:error, :invalid_hmac} = ETickets.validate_qr(tampered)
+    end
+  end
+
+  describe "scan_by_qr/1" do
+    test "scans ticket via QR payload" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      assert {:ok, scanned} = ETickets.scan_by_qr(ticket.qr_payload)
+      assert scanned.status == "scanned"
+      assert scanned.scanned_at != nil
+    end
+
+    test "rejects double scan via QR" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      {:ok, _} = ETickets.scan_by_qr(ticket.qr_payload)
+      assert {:error, :already_scanned, _} = ETickets.scan_by_qr(ticket.qr_payload)
+    end
+  end
+
+  describe "mark_delivered/1" do
+    test "transitions tickets from sold to delivered" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, tickets} = ETickets.generate_for_order(order)
+
+      ticket_ids = Enum.map(tickets, & &1.id)
+      {count, _} = ETickets.mark_delivered(ticket_ids)
+      assert count == 3
+
+      delivered = ETickets.list_tickets_for_order(order.id)
+      Enum.each(delivered, fn t ->
+        assert t.status == "delivered"
+        assert t.emailed_at != nil
+        assert t.delivered_at != nil
+      end)
+    end
+  end
+
+  describe "generate_qr_png/1" do
+    test "returns PNG binary" do
+      {order, _item, _event} = create_confirmed_order()
+      {:ok, [ticket | _]} = ETickets.generate_for_order(order)
+
+      png = ETickets.generate_qr_png(ticket)
+      assert is_binary(png)
+      # PNG magic bytes
+      assert <<137, 80, 78, 71, _rest::binary>> = png
     end
   end
 end
