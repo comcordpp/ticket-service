@@ -17,6 +17,8 @@ defmodule TicketService.Application do
       # Anti-bot
       TicketService.AntiBot.RateLimiter,
       TicketService.AntiBot.Detector,
+      # Analytics
+      TicketService.Analytics,
       TicketServiceWeb.Endpoint
     ]
 
