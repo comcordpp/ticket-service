@@ -15,6 +15,8 @@ defmodule TicketService.Application do
       # Queue system
       {Registry, keys: :unique, name: TicketService.QueueRegistry},
       {DynamicSupervisor, name: TicketService.QueueSupervisor, strategy: :one_for_one},
+      # Occupancy tracking
+      TicketService.Occupancy.Counter,
       # Anti-bot
       TicketService.AntiBot.RateLimiter,
       TicketService.AntiBot.Detector,
