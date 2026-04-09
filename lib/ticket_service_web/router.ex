@@ -62,6 +62,7 @@ defmodule TicketServiceWeb.Router do
     # Payment endpoints
     post "/orders/token/:token/pay", PaymentController, :create_intent
     post "/orders/:id/refund", PaymentController, :refund
+    get "/orders/:order_id/refunds", PaymentController, :index
 
     # E-Ticket endpoints
     get "/orders/:order_id/tickets", TicketController, :index

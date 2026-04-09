@@ -18,7 +18,9 @@ defmodule TicketService.Payments.MockStripe do
       id: "re_test_#{:crypto.strong_rand_bytes(8) |> Base.url_encode64(padding: false)}",
       amount: amount,
       payment_intent: params.payment_intent,
-      status: "succeeded"
+      status: "succeeded",
+      reverse_transfer: params[:reverse_transfer] || false,
+      refund_application_fee: params[:refund_application_fee] || false
     }}
   end
 

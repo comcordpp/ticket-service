@@ -36,19 +36,21 @@ defmodule TicketService.Payments.StripeClient do
     Stripe.PaymentIntent.create(attrs, opts)
   end
 
-  @doc "Create a Stripe Refund."
+  @doc """
+  Create a Stripe Refund.
+
+  Supports `reverse_transfer: true` for Connected Account refunds and
+  `refund_application_fee: true` to proportionally refund the platform fee.
+  """
   def create_refund(params) do
     attrs = %{
       payment_intent: params.payment_intent,
       reason: params[:reason] || "requested_by_customer"
     }
 
-    attrs =
-      if params[:amount] do
-        Map.put(attrs, :amount, params.amount)
-      else
-        attrs
-      end
+    attrs = if params[:amount], do: Map.put(attrs, :amount, params.amount), else: attrs
+    attrs = if params[:reverse_transfer], do: Map.put(attrs, :reverse_transfer, true), else: attrs
+    attrs = if params[:refund_application_fee], do: Map.put(attrs, :refund_application_fee, true), else: attrs
 
     opts = idempotency_opts(params[:idempotency_key])
 

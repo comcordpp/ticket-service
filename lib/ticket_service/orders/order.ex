@@ -30,6 +30,7 @@ defmodule TicketService.Orders.Order do
     belongs_to :promo_code, TicketService.Tickets.PromoCode
     has_many :order_items, TicketService.Orders.OrderItem
     has_many :tickets, TicketService.Tickets.Ticket
+    has_many :refunds, TicketService.Payments.Refund
 
     timestamps(type: :utc_datetime)
   end
