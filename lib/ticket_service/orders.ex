@@ -10,6 +10,7 @@ defmodule TicketService.Orders do
   alias TicketService.Carts
   alias TicketService.Pricing
   alias TicketService.Seating.Seat
+  alias TicketService.Queue.FairQueue
 
   @checkout_token_ttl_minutes 15
 
@@ -29,6 +30,7 @@ defmodule TicketService.Orders do
          :ok <- validate_cart_non_empty(cart),
          {:ok, line_items} <- resolve_line_items(cart),
          {:ok, event_id} <- resolve_event_id(line_items),
+         :ok <- validate_queue_pass(event_id, session_id),
          {:ok, promo} <- resolve_promo(event_id, promo_code),
          pricing <- calculate_pricing(line_items, promo) do
       create_order(session_id, event_id, cart, line_items, pricing, promo)
@@ -177,6 +179,19 @@ defmodule TicketService.Orders do
   end
 
   # --- Private ---
+
+  defp validate_queue_pass(event_id, session_id) do
+    if FairQueue.active?(event_id) do
+      case FairQueue.validate_pass(event_id, session_id) do
+        :ok -> :ok
+        {:error, :no_pass} -> {:error, :queue_pass_required}
+        {:error, :pass_expired} -> {:error, :queue_pass_expired}
+      end
+    else
+      # Queue not active for this event — no pass needed
+      :ok
+    end
+  end
 
   defp validate_cart_non_empty(%{items: []}), do: {:error, :cart_empty}
   defp validate_cart_non_empty(%{items: items}) when length(items) > 0, do: :ok

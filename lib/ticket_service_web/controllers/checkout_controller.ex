@@ -63,6 +63,12 @@ defmodule TicketServiceWeb.CheckoutController do
       {:error, :mixed_events_in_cart} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: "Cart contains tickets from multiple events"})
 
+      {:error, :queue_pass_required} ->
+        conn |> put_status(:forbidden) |> json(%{error: "Queue pass required. Join the queue first."})
+
+      {:error, :queue_pass_expired} ->
+        conn |> put_status(:forbidden) |> json(%{error: "Queue pass expired. Please rejoin the queue."})
+
       {:error, {:invalid_promo, reason}} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: "Invalid promo code: #{reason}"})
 
