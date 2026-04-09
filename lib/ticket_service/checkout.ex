@@ -10,6 +10,7 @@ defmodule TicketService.Checkout do
   alias TicketService.Tickets.TicketType
   alias TicketService.Seating.Seat
   alias TicketService.Pricing
+  alias TicketService.Pricing.FeeCalculator
 
   @default_ttl_ms :timer.minutes(10)
 
@@ -157,19 +158,49 @@ defmodule TicketService.Checkout do
       end)
 
     fees = Pricing.calculate(pricing_items)
+
+    # Also compute itemized fee breakdown via FeeCalculator if we can resolve event_id
+    event_ids =
+      ticket_types
+      |> Map.values()
+      |> Enum.map(& &1.event_id)
+      |> Enum.uniq()
+
+    itemized_fees =
+      case event_ids do
+        [event_id] ->
+          fee_items =
+            Enum.map(line_items, fn li ->
+              %{
+                ticket_type_id: li.ticket_type_id,
+                unit_price: li.unit_price || Decimal.new(0),
+                quantity: li.quantity
+              }
+            end)
+
+          FeeCalculator.calculate(fee_items, event_id)
+
+        _ ->
+          nil
+      end
+
     ttl_remaining_ms = cart_ttl_remaining(cart)
 
-    {:ok,
-     %{
-       session_id: cart.session_id,
-       line_items: line_items,
-       item_count: length(line_items),
-       total_tickets: fees.total_tickets,
-       fees: fees,
-       ttl_remaining_seconds: max(div(ttl_remaining_ms, 1000), 0),
-       created_at: cart.created_at,
-       last_activity_at: cart.last_activity_at
-     }}
+    result = %{
+      session_id: cart.session_id,
+      line_items: line_items,
+      item_count: length(line_items),
+      total_tickets: fees.total_tickets,
+      fees: fees,
+      ttl_remaining_seconds: max(div(ttl_remaining_ms, 1000), 0),
+      created_at: cart.created_at,
+      last_activity_at: cart.last_activity_at
+    }
+
+    result =
+      if itemized_fees, do: Map.put(result, :itemized_fees, itemized_fees), else: result
+
+    {:ok, result}
   end
 
   defp cart_ttl_remaining(cart) do
