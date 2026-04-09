@@ -35,6 +35,19 @@ config :ticket_service, TicketService.AntiBot.RateLimiter,
   allowlist: [],
   blocklist: []
 
+# Bot detection configuration
+config :ticket_service, TicketService.AntiBot.Detector,
+  captcha_threshold: 60,
+  block_threshold: 90,
+  velocity_threshold_ms: 500,
+  session_ttl_ms: 1_800_000
+
+# CAPTCHA provider configuration
+config :ticket_service, TicketService.AntiBot.CaptchaProvider,
+  provider: TicketService.AntiBot.CaptchaProvider.Noop,
+  site_key: System.get_env("CAPTCHA_SITE_KEY") || "test-site-key",
+  secret_key: System.get_env("CAPTCHA_SECRET_KEY") || "test-secret-key"
+
 # Stripe configuration
 config :stripity_stripe,
   api_key: System.get_env("STRIPE_SECRET_KEY") || "sk_test_placeholder"

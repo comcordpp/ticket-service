@@ -17,6 +17,10 @@ defmodule TicketServiceWeb.Router do
     plug TicketServiceWeb.Plugs.RateLimit, endpoint: "checkout"
   end
 
+  pipeline :bot_guarded do
+    plug TicketServiceWeb.Plugs.BotGuard
+  end
+
   scope "/api", TicketServiceWeb do
     pipe_through :api
 
@@ -91,6 +95,13 @@ defmodule TicketServiceWeb.Router do
     # Admin queue stats
     get "/admin/events/:event_id/queue/stats", QueueController, :stats
 
+    # Admin bot detection
+    get "/admin/bot-detection/stats", BotDetectionController, :stats
+    get "/admin/bot-detection/audit-log", BotDetectionController, :audit_log
+    get "/admin/bot-detection/rules", BotDetectionController, :index_rules
+    post "/admin/bot-detection/rules", BotDetectionController, :create_rule
+    delete "/admin/bot-detection/rules/:id", BotDetectionController, :delete_rule
+
     # CAPTCHA verification
     post "/captcha/verify", CaptchaController, :verify
 
@@ -98,9 +109,9 @@ defmodule TicketServiceWeb.Router do
     get "/public/events", EventController, :index
   end
 
-  # Rate-limited cart mutation endpoints
+  # Rate-limited and bot-guarded cart mutation endpoints
   scope "/api", TicketServiceWeb do
-    pipe_through [:api, :rate_limited_cart]
+    pipe_through [:api, :rate_limited_cart, :bot_guarded]
 
     post "/carts/:session_id/items", CartController, :add_item
     delete "/carts/:session_id/items/:ticket_type_id", CartController, :remove_item
@@ -108,9 +119,9 @@ defmodule TicketServiceWeb.Router do
     delete "/carts/:session_id", CartController, :clear
   end
 
-  # Rate-limited checkout and payment endpoints
+  # Rate-limited and bot-guarded checkout and payment endpoints
   scope "/api", TicketServiceWeb do
-    pipe_through [:api, :rate_limited_checkout]
+    pipe_through [:api, :rate_limited_checkout, :bot_guarded]
 
     get "/carts/:session_id/review", CheckoutController, :review
     post "/carts/:session_id/checkout", CheckoutController, :create
