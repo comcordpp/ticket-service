@@ -102,6 +102,12 @@ defmodule TicketServiceWeb.Router do
     post "/admin/bot-detection/rules", BotDetectionController, :create_rule
     delete "/admin/bot-detection/rules/:id", BotDetectionController, :delete_rule
 
+    # Occupancy tracking
+    post "/occupancy/entry", OccupancyController, :entry
+    post "/occupancy/exit", OccupancyController, :exit_
+    get "/occupancy/:venue_id", OccupancyController, :show
+    get "/occupancy/:venue_id/sections", OccupancyController, :sections
+
     # CAPTCHA verification
     post "/captcha/verify", CaptchaController, :verify
 
