@@ -12,6 +12,6 @@ defmodule TicketService.Repo.Migrations.CreateOccupancySnapshots do
     end
 
     create index(:occupancy_snapshots, [:venue_id])
-    create index(:occupancy_snapshots, [:venue_id, :section_id])
+    create unique_index(:occupancy_snapshots, [:venue_id, :section_id])
   end
 end

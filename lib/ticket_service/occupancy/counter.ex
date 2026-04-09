@@ -193,7 +193,7 @@ defmodule TicketService.Occupancy.Counter do
             updated_at: now
           },
           on_conflict: {:replace, [:count, :updated_at]},
-          conflict_target: [:id]
+          conflict_target: [:venue_id, :section_id]
         )
       rescue
         e ->
