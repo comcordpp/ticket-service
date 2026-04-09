@@ -8,6 +8,10 @@ defmodule TicketServiceWeb.Endpoint do
     same_site: "Lax"
   ]
 
+  socket "/socket", TicketServiceWeb.UserSocket,
+    websocket: true,
+    longpoll: false
+
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 

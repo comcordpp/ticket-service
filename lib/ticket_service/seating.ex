@@ -52,6 +52,17 @@ defmodule TicketService.Seating do
     Repo.delete(section)
   end
 
+  @doc "Get all seats for an event (across all venue sections) for the live seat map."
+  def get_seat_map(event_id) do
+    Seat
+    |> join(:inner, [s], sec in Section, on: s.section_id == sec.id)
+    |> join(:inner, [s, sec], v in TicketService.Venues.Venue, on: sec.venue_id == v.id)
+    |> join(:inner, [s, sec, v], e in TicketService.Events.Event, on: e.venue_id == v.id)
+    |> where([s, sec, v, e], e.id == ^event_id)
+    |> order_by([s], asc: s.row_label, asc: s.seat_number)
+    |> Repo.all()
+  end
+
   def list_seats(section_id) do
     Seat
     |> where([s], s.section_id == ^section_id)
