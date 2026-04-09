@@ -20,7 +20,7 @@ defmodule TicketService.Events do
   def get_event_with_details(id) do
     Event
     |> Repo.get(id)
-    |> Repo.preload([:venue, :ticket_types, venue: :sections])
+    |> Repo.preload([:venue, :ticket_types, :organizer, venue: :sections])
   end
 
   def create_event(attrs) do

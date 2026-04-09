@@ -1,32 +1,42 @@
 defmodule TicketService.Payments do
   @moduledoc """
-  Payments context — manages Stripe PaymentIntents, webhook processing,
-  and refund operations.
+  Payments context — manages Stripe PaymentIntents with Connect split payments,
+  webhook processing, and refund operations.
   """
   import Ecto.Query
 
   alias TicketService.Repo
   alias TicketService.Orders
   alias TicketService.Orders.Order
+  alias TicketService.ETickets
+  alias TicketService.Carts
 
   @doc """
   Create a Stripe PaymentIntent for an order.
 
-  Converts the order total to cents for Stripe and creates a PaymentIntent.
+  When the event has an organizer with a connected Stripe account, creates a
+  Connect PaymentIntent with application_fee_amount (platform + processing fees)
+  and transfer_data directing funds to the organizer's connected account.
+
   Returns `{:ok, %{client_secret: ..., payment_intent_id: ...}}` on success.
   """
   def create_payment_intent(%Order{} = order) do
+    order = Repo.preload(order, event: :organizer)
     amount_cents = decimal_to_cents(order.total)
+    idempotency_key = "pi_order_#{order.id}"
 
-    params = %{
-      amount: amount_cents,
-      currency: "usd",
-      metadata: %{
-        order_id: order.id,
-        event_id: order.event_id,
-        checkout_token: order.checkout_token
+    params =
+      %{
+        amount: amount_cents,
+        currency: "usd",
+        idempotency_key: idempotency_key,
+        metadata: %{
+          order_id: order.id,
+          event_id: order.event_id,
+          checkout_token: order.checkout_token
+        }
       }
-    }
+      |> maybe_add_connect_params(order)
 
     case stripe_client().create_payment_intent(params) do
       {:ok, %{id: intent_id, client_secret: client_secret}} ->
@@ -49,7 +59,7 @@ defmodule TicketService.Payments do
   Handle Stripe webhook events.
 
   Supported events:
-  - `payment_intent.succeeded` — confirms the order and triggers e-ticket generation
+  - `payment_intent.succeeded` — confirms the order, generates e-tickets, clears cart
   - `payment_intent.payment_failed` — marks the order as failed
   - `charge.refunded` — marks the order as refunded
   """
@@ -57,14 +67,24 @@ defmodule TicketService.Payments do
     intent_id = object["id"]
 
     case get_order_by_intent(intent_id) do
-      nil -> {:error, :order_not_found}
-      order -> Orders.confirm_order(order)
+      nil ->
+        {:error, :order_not_found}
+
+      order ->
+        with {:ok, confirmed} <- Orders.confirm_order(order) do
+          # Clear the cart after successful payment
+          if order.session_id do
+            Task.start(fn -> Carts.clear_cart(order.session_id, release_inventory: false) end)
+          end
+
+          {:ok, confirmed}
+        end
     end
   end
 
   def handle_webhook_event(%{"type" => "payment_intent.payment_failed", "data" => %{"object" => object}}) do
     intent_id = object["id"]
-    error_message = get_in(object, ["last_payment_error", "message"]) || "Payment failed"
+    _error_message = get_in(object, ["last_payment_error", "message"]) || "Payment failed"
 
     case get_order_by_intent(intent_id) do
       nil ->
@@ -116,7 +136,8 @@ defmodule TicketService.Payments do
       intent_id ->
         refund_params = %{
           payment_intent: intent_id,
-          reason: reason
+          reason: reason,
+          idempotency_key: "refund_full_#{order.id}"
         }
 
         case stripe_client().create_refund(refund_params) do
@@ -162,7 +183,8 @@ defmodule TicketService.Payments do
         refund_params = %{
           payment_intent: intent_id,
           amount: amount_cents,
-          reason: reason
+          reason: reason,
+          idempotency_key: "refund_partial_#{order.id}_#{amount_cents}"
         }
 
         case stripe_client().create_refund(refund_params) do
@@ -198,6 +220,18 @@ defmodule TicketService.Payments do
 
   # --- Private ---
 
+  defp maybe_add_connect_params(params, %{event: %{organizer: %{stripe_account_id: account_id, stripe_charges_enabled: true}}} = order) when is_binary(account_id) do
+    # Platform keeps platform_fee + processing_fee as application fee
+    # The rest (subtotal - discount) goes to the organizer
+    application_fee_cents = decimal_to_cents(Decimal.add(order.platform_fee, order.processing_fee))
+
+    params
+    |> Map.put(:application_fee_amount, application_fee_cents)
+    |> Map.put(:transfer_data, %{destination: account_id})
+  end
+
+  defp maybe_add_connect_params(params, _order), do: params
+
   defp get_order_by_intent(intent_id) do
     Order
     |> where([o], o.stripe_payment_intent_id == ^intent_id)
@@ -212,7 +246,7 @@ defmodule TicketService.Payments do
     order = Repo.preload(order, :order_items)
 
     Enum.each(order.order_items, fn item ->
-      TicketService.Carts.release_inventory_on_expiry(item.ticket_type_id, item.quantity, item.seat_ids)
+      Carts.release_inventory_on_expiry(item.ticket_type_id, item.quantity, item.seat_ids)
     end)
   end
 

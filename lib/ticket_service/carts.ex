@@ -97,13 +97,23 @@ defmodule TicketService.Carts do
     end
   end
 
-  @doc "Clear all items from the cart, releasing all held inventory."
-  def clear_cart(session_id) do
+  @doc """
+  Clear all items from the cart, releasing all held inventory.
+
+  Options:
+  - `:release_inventory` (default `true`) — set to `false` when inventory has
+    already been committed (e.g. after successful payment).
+  """
+  def clear_cart(session_id, opts \\ []) do
+    release? = Keyword.get(opts, :release_inventory, true)
+
     with {:ok, _pid} <- ensure_cart(session_id),
          {:ok, cart} <- CartServer.get_cart(session_id) do
-      Enum.each(cart.items, fn item ->
-        release_inventory(item.ticket_type_id, item.quantity, item.seat_ids)
-      end)
+      if release? do
+        Enum.each(cart.items, fn item ->
+          release_inventory(item.ticket_type_id, item.quantity, item.seat_ids)
+        end)
+      end
 
       CartServer.clear(session_id)
     end

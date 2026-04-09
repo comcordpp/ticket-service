@@ -16,6 +16,7 @@ defmodule TicketService.Events.Event do
     field :ends_at, :utc_datetime
 
     belongs_to :venue, TicketService.Venues.Venue
+    belongs_to :organizer, TicketService.Organizers.Organizer
     has_many :ticket_types, TicketService.Tickets.TicketType
     has_many :orders, TicketService.Orders.Order
     has_many :sections, through: [:venue, :sections]
@@ -26,11 +27,12 @@ defmodule TicketService.Events.Event do
   @doc "Standard changeset for creating/updating events."
   def changeset(event, attrs) do
     event
-    |> cast(attrs, [:title, :description, :category, :status, :starts_at, :ends_at, :venue_id])
+    |> cast(attrs, [:title, :description, :category, :status, :starts_at, :ends_at, :venue_id, :organizer_id])
     |> validate_required([:title, :starts_at])
     |> validate_inclusion(:status, @statuses)
     |> validate_dates()
     |> foreign_key_constraint(:venue_id)
+    |> foreign_key_constraint(:organizer_id)
   end
 
   @locked_fields_with_sales [:venue_id, :starts_at, :category]

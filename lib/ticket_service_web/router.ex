@@ -37,6 +37,13 @@ defmodule TicketServiceWeb.Router do
     resources "/ticket_types", TicketTypeController, only: [:show, :update, :delete]
     resources "/promo_codes", PromoCodeController, only: [:show, :update, :delete]
 
+    # Organizers
+    resources "/organizers", OrganizerController, except: [:new, :edit, :delete] do
+      post "/connect", OrganizerController, :create_connect_account
+      post "/onboarding-link", OrganizerController, :onboarding_link
+      post "/refresh-status", OrganizerController, :refresh_status
+    end
+
     # Carts
     get "/carts/:session_id", CartController, :show
     post "/carts/:session_id/items", CartController, :add_item
