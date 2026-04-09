@@ -5,6 +5,18 @@ defmodule TicketServiceWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :rate_limited do
+    plug TicketServiceWeb.Plugs.RateLimit, endpoint: "purchase"
+  end
+
+  pipeline :rate_limited_cart do
+    plug TicketServiceWeb.Plugs.RateLimit, endpoint: "cart_add"
+  end
+
+  pipeline :rate_limited_checkout do
+    plug TicketServiceWeb.Plugs.RateLimit, endpoint: "checkout"
+  end
+
   scope "/api", TicketServiceWeb do
     pipe_through :api
 
@@ -44,24 +56,12 @@ defmodule TicketServiceWeb.Router do
       post "/refresh-status", OrganizerController, :refresh_status
     end
 
-    # Carts
+    # Carts (read-only — standard rate limit)
     get "/carts/:session_id", CartController, :show
-    post "/carts/:session_id/items", CartController, :add_item
-    delete "/carts/:session_id/items/:ticket_type_id", CartController, :remove_item
-    patch "/carts/:session_id/items/:ticket_type_id", CartController, :update_item
-    delete "/carts/:session_id", CartController, :clear
-    # Pricing breakdown
     get "/carts/:session_id/pricing", PricingController, :show
 
-    # Checkout flow
-    get "/carts/:session_id/review", CheckoutController, :review
-    post "/carts/:session_id/checkout", CheckoutController, :create
+    # Orders (read-only)
     get "/orders/token/:token", CheckoutController, :show
-    post "/orders/token/:token/confirm", CheckoutController, :confirm
-
-    # Payment endpoints
-    post "/orders/token/:token/pay", PaymentController, :create_intent
-    post "/orders/:id/refund", PaymentController, :refund
     get "/orders/:order_id/refunds", PaymentController, :index
 
     # E-Ticket endpoints
@@ -82,14 +82,41 @@ defmodule TicketServiceWeb.Router do
     post "/events/:event_id/analytics/alerts", AnalyticsController, :set_alert
 
     # Queue system
+    post "/events/:event_id/queue/join", QueueController, :join
+    get "/events/:event_id/queue/position/:session_id", QueueController, :position
+    # Legacy routes (backward compat)
     post "/events/:event_id/queue/access", QueueController, :request_access
     get "/events/:event_id/queue/status", QueueController, :status
+
+    # Admin queue stats
+    get "/admin/events/:event_id/queue/stats", QueueController, :stats
 
     # CAPTCHA verification
     post "/captcha/verify", CaptchaController, :verify
 
     # Public listing
     get "/public/events", EventController, :index
+  end
+
+  # Rate-limited cart mutation endpoints
+  scope "/api", TicketServiceWeb do
+    pipe_through [:api, :rate_limited_cart]
+
+    post "/carts/:session_id/items", CartController, :add_item
+    delete "/carts/:session_id/items/:ticket_type_id", CartController, :remove_item
+    patch "/carts/:session_id/items/:ticket_type_id", CartController, :update_item
+    delete "/carts/:session_id", CartController, :clear
+  end
+
+  # Rate-limited checkout and payment endpoints
+  scope "/api", TicketServiceWeb do
+    pipe_through [:api, :rate_limited_checkout]
+
+    get "/carts/:session_id/review", CheckoutController, :review
+    post "/carts/:session_id/checkout", CheckoutController, :create
+    post "/orders/token/:token/confirm", CheckoutController, :confirm
+    post "/orders/token/:token/pay", PaymentController, :create_intent
+    post "/orders/:id/refund", PaymentController, :refund
   end
 
   # Stripe webhook — outside API pipeline (needs raw body for signature verification)

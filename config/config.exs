@@ -20,6 +20,21 @@ config :logger, :console,
 
 config :phoenix, :json_library, Jason
 
+# Rate limiter configuration
+config :ticket_service, TicketService.AntiBot.RateLimiter,
+  ip_limit: 60,
+  ip_window_ms: 60_000,
+  session_limit: 30,
+  session_window_ms: 60_000,
+  endpoints: %{
+    "purchase" => %{ip_limit: 60, session_limit: 30, window_ms: 60_000},
+    "cart_add" => %{ip_limit: 30, session_limit: 15, window_ms: 60_000},
+    "checkout" => %{ip_limit: 10, session_limit: 5, window_ms: 60_000}
+  },
+  event_overrides: %{},
+  allowlist: [],
+  blocklist: []
+
 # Stripe configuration
 config :stripity_stripe,
   api_key: System.get_env("STRIPE_SECRET_KEY") || "sk_test_placeholder"
