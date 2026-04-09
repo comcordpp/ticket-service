@@ -23,6 +23,15 @@ defmodule TicketServiceWeb do
     end
   end
 
+  def live_view do
+    quote do
+      use Phoenix.LiveView,
+        layout: {TicketServiceWeb.Layouts, :app}
+
+      unquote(verified_routes())
+    end
+  end
+
   def channel do
     quote do
       use Phoenix.Channel

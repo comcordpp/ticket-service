@@ -1,5 +1,6 @@
 defmodule TicketServiceWeb.Router do
   use TicketServiceWeb, :router
+  import Phoenix.LiveView.Router
 
   pipeline :api do
     plug :accepts, ["json"]
@@ -15,6 +16,13 @@ defmodule TicketServiceWeb.Router do
 
   pipeline :rate_limited_checkout do
     plug TicketServiceWeb.Plugs.RateLimit, endpoint: "checkout"
+  end
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
   end
 
   pipeline :bot_guarded do
@@ -134,6 +142,14 @@ defmodule TicketServiceWeb.Router do
     post "/orders/token/:token/confirm", CheckoutController, :confirm
     post "/orders/token/:token/pay", PaymentController, :create_intent
     post "/orders/:id/refund", PaymentController, :refund
+  end
+
+  # LiveView routes for occupancy dashboard
+  scope "/", TicketServiceWeb do
+    pipe_through :browser
+
+    live "/admin/occupancy/:venue_id", OccupancyLive
+    live "/demo/occupancy", OccupancyDemoLive
   end
 
   # Stripe webhook — outside API pipeline (needs raw body for signature verification)
