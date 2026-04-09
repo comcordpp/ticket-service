@@ -35,7 +35,11 @@ defmodule TicketService.MixProject do
       {:jason, "~> 1.4"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.6"},
-      {:uuid, "~> 1.1"}
+      {:uuid, "~> 1.1"},
+      {:stripity_stripe, "~> 3.2"},
+      {:eqrcode, "~> 0.1.10"},
+      {:swoosh, "~> 1.17"},
+      {:gen_smtp, "~> 1.0"}
     ]
   end
 

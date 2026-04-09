@@ -54,49 +54,84 @@ defmodule TicketService.Orders do
     end
   end
 
-  @doc "Confirm an order (after successful payment)."
-  def confirm_order(%Order{} = order) do
-    Repo.transaction(fn ->
-      # Mark order confirmed
-      {:ok, confirmed} =
-        order
-        |> Order.changeset(%{status: "confirmed"})
-        |> Repo.update()
+  @doc """
+  Confirm an order (after successful payment).
 
-      # Mark seats as sold with optimistic locking
-      order = Repo.preload(order, :order_items)
+  Marks order as confirmed, transitions seats to sold, increments promo usage,
+  and generates e-tickets.
+  """
+  def confirm_order(%Order{} = order, opts \\ []) do
+    result =
+      Repo.transaction(fn ->
+        # Mark order confirmed
+        {:ok, confirmed} =
+          order
+          |> Order.changeset(%{status: "confirmed"})
+          |> Repo.update()
 
-      seat_ids =
-        order.order_items
-        |> Enum.flat_map(& &1.seat_ids)
-        |> Enum.reject(&is_nil/1)
+        # Mark seats as sold with optimistic locking
+        order = Repo.preload(order, :order_items)
 
-      if seat_ids != [] do
-        seats = from(s in Seat, where: s.id in ^seat_ids) |> Repo.all()
+        seat_ids =
+          order.order_items
+          |> Enum.flat_map(& &1.seat_ids)
+          |> Enum.reject(&is_nil/1)
 
-        try do
-          Enum.each(seats, fn seat ->
-            case seat |> Seat.status_changeset("sold") |> Repo.update() do
-              {:ok, _} -> :ok
-              {:error, _} -> Repo.rollback(:seat_confirmation_conflict)
-            end
-          end)
-        rescue
-          Ecto.StaleEntryError ->
-            Repo.rollback(:seat_confirmation_conflict)
+        if seat_ids != [] do
+          seats = from(s in Seat, where: s.id in ^seat_ids) |> Repo.all()
+
+          try do
+            Enum.each(seats, fn seat ->
+              case seat |> Seat.status_changeset("sold") |> Repo.update() do
+                {:ok, _} -> :ok
+                {:error, _} -> Repo.rollback(:seat_confirmation_conflict)
+              end
+            end)
+          rescue
+            Ecto.StaleEntryError ->
+              Repo.rollback(:seat_confirmation_conflict)
+          end
         end
-      end
 
-      # Increment promo code used_count if applicable
-      if confirmed.promo_code_id do
-        from(pc in TicketService.Tickets.PromoCode,
-          where: pc.id == ^confirmed.promo_code_id
-        )
-        |> Repo.update_all(inc: [used_count: 1])
-      end
+        # Increment promo code used_count if applicable
+        if confirmed.promo_code_id do
+          from(pc in TicketService.Tickets.PromoCode,
+            where: pc.id == ^confirmed.promo_code_id
+          )
+          |> Repo.update_all(inc: [used_count: 1])
+        end
 
-      confirmed
-    end)
+        confirmed
+      end)
+
+    # Generate e-tickets async after successful confirmation
+    case result do
+      {:ok, confirmed} ->
+        Task.start(fn ->
+          generate_and_deliver_etickets(confirmed, opts)
+        end)
+
+        {:ok, confirmed}
+
+      error ->
+        error
+    end
+  end
+
+  defp generate_and_deliver_etickets(order, opts) do
+    email = Keyword.get(opts, :email)
+    name = Keyword.get(opts, :name)
+
+    case TicketService.ETickets.generate_for_order(order, email: email, name: name) do
+      {:ok, tickets} ->
+        if email do
+          TicketService.Notifications.deliver_etickets(order, tickets)
+        end
+
+      {:error, reason} ->
+        require Logger
+        Logger.warning("Failed to generate e-tickets for order #{order.id}: #{inspect(reason)}")
+    end
   end
 
   @doc "Cancel an order and release inventory."

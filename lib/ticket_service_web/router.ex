@@ -49,8 +49,22 @@ defmodule TicketServiceWeb.Router do
     get "/orders/token/:token", CheckoutController, :show
     post "/orders/token/:token/confirm", CheckoutController, :confirm
 
+    # Payment endpoints
+    post "/orders/token/:token/pay", PaymentController, :create_intent
+    post "/orders/:id/refund", PaymentController, :refund
+
+    # E-Ticket endpoints
+    get "/orders/:order_id/tickets", TicketController, :index
+    get "/tickets/:token", TicketController, :show
+    post "/tickets/:token/scan", TicketController, :scan
+
     # Public listing
     get "/public/events", EventController, :index
+  end
+
+  # Stripe webhook — outside API pipeline (needs raw body for signature verification)
+  scope "/webhooks", TicketServiceWeb do
+    post "/stripe", WebhookController, :stripe
   end
 
   if Application.compile_env(:ticket_service, :dev_routes, false) do

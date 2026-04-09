@@ -82,10 +82,15 @@ defmodule TicketServiceWeb.CheckoutController do
     end
   end
 
-  @doc "Confirm an order (simulates payment success)."
-  def confirm(conn, %{"token" => token}) do
+  @doc "Confirm an order (simulates payment success for dev/testing)."
+  def confirm(conn, %{"token" => token} = params) do
+    opts = [
+      email: Map.get(params, "email"),
+      name: Map.get(params, "name")
+    ]
+
     with {:ok, order} <- Orders.get_order_by_token(token),
-         {:ok, confirmed} <- Orders.confirm_order(order) do
+         {:ok, confirmed} <- Orders.confirm_order(order, opts) do
       confirmed = Repo.preload(confirmed, order_items: :ticket_type)
       json(conn, %{data: format_order(confirmed)})
     else
